@@ -1,9 +1,8 @@
-# from wavetda import persistence_diagram as pd
-# from wavetda import persistence_kernels as pk
-# from wavetda import persistence_wavelets as pw
-import bayes_regression as br
-
+# import package dependencies
 import numpy as np
+
+# import local modules
+from wavetda.statistics import bayes_regression as br
 
 class BayesianRegression(object):
 

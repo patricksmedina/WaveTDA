@@ -1,4 +1,4 @@
-import bayestda.bayestda as bayestda
+from wavetda.statistics import bayestda as bayestda
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,7 +21,7 @@ def matthews_simulations(numSamples, numWavelets, b0, b1, r):
     wc1 = np.array(wc1).reshape(-1, numWavelets)
     return(np.hstack((wc0, wc1)), np.array(x).reshape(-1, 1))
 
-numSamples = 250
+numSamples = 1000
 numWavelets = 4 ** 3
 numCovariates = 1
 groupScaling = False
@@ -39,31 +39,31 @@ br = bayestda.BayesianRegression(waveletCoefficients, covariateMatrix, numSample
 br()
 # # #
 print(np.array(br.class_probs).reshape(-1,4))
-allLnBayesFactors = br.all_lnbfs
+# allLnBayesFactors = br.all_lnbfs
 
-plt.figure(1)
-idx2 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 2)[0]
-idx1 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 1)[0]
-idx0 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 0)[0]
-
-wc0 = waveletCoefficients[:, :numWavelets]
-wc1 = waveletCoefficients[:, numWavelets:]
-plt.subplot(221)
-plt.scatter(wc1.ravel()[idx2], wc0.ravel()[idx2],c = "green")
-plt.scatter(wc1.ravel()[idx1], wc0.ravel()[idx1],c = "orange")
-plt.scatter(wc1.ravel()[idx0], wc0.ravel()[idx0],c = "blue")
-plt.subplot(222)
-plt.scatter(np.tile(covariateMatrix,numWavelets).ravel(), wc0.ravel())
-plt.subplot(223)
-plt.scatter(np.tile(covariateMatrix,numWavelets).ravel(), wc1.ravel())
-plt.show()
-
-n_bins = 20
-plt.figure(2)
-plt.subplot(131)
-plt.hist(allLnBayesFactors[0, :], bins=n_bins)
-plt.subplot(132)
-plt.hist(allLnBayesFactors[1, :], bins=n_bins)
-plt.subplot(133)
-plt.hist(allLnBayesFactors[2, :], bins=n_bins)
-plt.show()
+# plt.figure(1)
+# idx2 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 2)[0]
+# idx1 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 1)[0]
+# idx0 = np.where(np.tile(covariateMatrix,numWavelets).ravel() == 0)[0]
+#
+# wc0 = waveletCoefficients[:, :numWavelets]
+# wc1 = waveletCoefficients[:, numWavelets:]
+# plt.subplot(221)
+# plt.scatter(wc1.ravel()[idx2], wc0.ravel()[idx2],c = "green")
+# plt.scatter(wc1.ravel()[idx1], wc0.ravel()[idx1],c = "orange")
+# plt.scatter(wc1.ravel()[idx0], wc0.ravel()[idx0],c = "blue")
+# plt.subplot(222)
+# plt.scatter(np.tile(covariateMatrix,numWavelets).ravel(), wc0.ravel())
+# plt.subplot(223)
+# plt.scatter(np.tile(covariateMatrix,numWavelets).ravel(), wc1.ravel())
+# plt.show()
+#
+# n_bins = 20
+# plt.figure(2)
+# plt.subplot(131)
+# plt.hist(allLnBayesFactors[0, :], bins=n_bins)
+# plt.subplot(132)
+# plt.hist(allLnBayesFactors[1, :], bins=n_bins)
+# plt.subplot(133)
+# plt.hist(allLnBayesFactors[2, :], bins=n_bins)
+# plt.show()
