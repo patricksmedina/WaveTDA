@@ -253,15 +253,16 @@ double btda::bayesRegressionDM::computeSingleLogLikelihood(vector <double> & tem
     allLnBayesFactors[1][wav] = lnBF2;
     allLnBayesFactors[2][wav] = lnBF3;
 
-    // update gamma values
-    double denom = (piEstimates[s * 4] +
-                    piEstimates[s * 4 + 1] * exp(lnBF1) +
-                    piEstimates[s * 4 + 2] * exp(lnBF2) +
-                    piEstimates[s * 4 + 3] * exp(lnBF3));
+    // update gamma values -- written to prevent exponential term from blowing up...
+    double denom = (piEstimates[s * 4] * exp(-lnBF3) +
+                    piEstimates[s * 4 + 1] * exp(lnBF1 - lnBF3) +
+                    piEstimates[s * 4 + 2] * exp(lnBF2 - lnBF3) +
+                    piEstimates[s * 4 + 3]
+    );
 
-    gamma0 = piEstimates[s * 4] / denom;
-    gamma1 = (piEstimates[s * 4 + 1] * exp(lnBF1)) / denom;
-    gamma2 = (piEstimates[s * 4 + 2] * exp(lnBF2)) / denom;
+    gamma0 = (piEstimates[s * 4] * exp(-lnBF3)) / denom;
+    gamma1 = (piEstimates[s * 4 + 1] * exp(lnBF1 - lnBF3)) / denom;
+    gamma2 = (piEstimates[s * 4 + 2] * exp(lnBF2 - lnBF3)) / denom;
     gamma3 = 1 - gamma0 - gamma1 - gamma2;
 
     // update the piEstimates arrray for the next step.
