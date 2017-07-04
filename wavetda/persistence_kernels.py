@@ -1,24 +1,17 @@
 # external packages
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 from matplotlib import cm
 import numpy as np
-from scipy.stats import norm
 
-class PersistenceKernels(object):
+class PersistenceKernel(object):
     """ Routines for computing persistence kernels """
 
-    def __init__(self, PD, kernel, birth_domain, death_domain, scale):
-        # dictionary of kernel smoothing functions
-        _kf = {"pi":self.pi, "pwgk":self.pwgk, "pif":self.pif}
-
+    def __init__(self, PD, birth_domain, death_domain, scale):
         self.PD = PD
-        self.kernel = kernel
         self.birth_domain = birth_domain
         self.death_domain = death_domain
         self.scale = scale
-        self.smooth_diagram = _kf[self.kernel]
-        self.kernel_parameters = None
-        self.kernel_function = None
 
     def _construct_domain(self):
         bd = np.linspace(start = self.birth_domain[0],
@@ -30,12 +23,15 @@ class PersistenceKernels(object):
                          num = 2 ** self.scale)
         return(np.meshgrid(bd, dd))
 
-    def pwgk(self, C, p, bandwidth, homology_group=None,
-             delete_rows=None, zero_out=False, **kwargs):
+class PWGK(PersistenceKernel):
 
-        # store the kernel parameters used in a dictionary
-        self.kernel_parameters = {"C":C, "p":p, "bandwidth":bandwidth}
+    def __init__(self, PD, birth_domain, death_domain, scale, C, p, bandwidth):
+        super(PWGK, self).__init__(PD, birth_domain, death_domain, scale)
+        self.C = C
+        self.p = p
+        self.bandwidth = bandwidth
 
+    def smooth(self, homology_group=None, delete_rows=None, zero_out=False):
         # construct the domain
         xx, yy = self._construct_domain()
         domain = np.vstack((xx.ravel(), yy.ravel())).T
@@ -45,7 +41,7 @@ class PersistenceKernels(object):
             temp_PD = self.PD.PD.copy()
         else:
             temp_PD = self.PD.select_homology(homology_group=homology_group,
-                                             delete_rows=delete_rows)
+                                              delete_rows=delete_rows)
 
         # Return zero matrix if homology group is empty
         if temp_PD.shape[0] == 0:
@@ -63,11 +59,11 @@ class PersistenceKernels(object):
         Fbd = np.square(np.linalg.norm(Fbd, axis = 1)).reshape(domain.shape[0],-1)
 
         # for each persistence point, compute the Gaussian at each point in the domain
-        Fbd = np.exp(- Fbd / (2.0 * bandwidth ** 2))
-        Fbd /= (2 * np.pi * bandwidth ** 2)
+        Fbd = np.exp(- Fbd / (2.0 * self.bandwidth ** 2))
+        Fbd /= (2 * np.pi * self.bandwidth ** 2)
 
         # compute the weights for each birth-death point
-        weights = np.arctan(C * (temp_PD[:, 1] - temp_PD[:, 0]) ** p)
+        weights = np.arctan(self.C * (temp_PD[:, 1] - temp_PD[:, 0]) ** self.p)
 
         Fbd = np.sum(np.multiply(weights, Fbd), axis = 1)
 
@@ -78,11 +74,12 @@ class PersistenceKernels(object):
         # return the kernel between PD1 and PD2
         return(Fbd.reshape(2 ** self.scale, 2 ** self.scale))
 
-    def pif(self, bandwidth, homology_group=None,
-            delete_rows=None, zero_out=False, **kwargs):
+class PIF(PersistenceKernel):
+    def __init__(PD, birth_domain, death_domain, scale, bandwidth):
+        self.bandwidth = bandwidth
+        super(PIF, self).__init__(PD, birth_domain, death_domain, scale)
 
-        # store the kernel parameters used in a dictionary
-        self.kernel_parameters = {"bandwidth": bandwidth}
+    def smooth(self, homology_group=None, delete_rows=None, zero_out=False):
 
         # construct the domain
         xx, yy = self._construct_domain()
@@ -114,7 +111,8 @@ class PersistenceKernels(object):
         weight = temp_PD[:, 1] - temp_PD[:, 0]
 
         # for each persistence point, compute the Gaussian at each point in the domain
-        Fbd = np.exp(- Fbd / (2.0 * bandwidth ** 2)) / (2 * np.pi * bandwidth ** 2)
+        Fbd = np.exp(- Fbd / (2.0 * self.bandwidth ** 2)) \
+              / (2 * np.pi * self.bandwidth ** 2)
         Fbd = np.sum(np.multiply(weight, Fbd), axis = 1)
 
         # zero out stuff below the diagonal
@@ -124,11 +122,14 @@ class PersistenceKernels(object):
         # store the kernel smoothed diagram
         return(Fbd.reshape(2 ** self.scale, 2 ** self.scale))
 
-    def pi(self, bandwidth, max_persistence, homology_group=None,
-            delete_rows=None, zero_out=False, **kwargs):
+class PI(PersistenceKernel):
+    def __init__(PD, birth_domain, death_domain, scale, bandwidth,
+                 max_persistence=None):
+        self.bandwidth = bandwidth
+        self.max_persistence = max_persistence
+        super(PI, self).__init__(PD, birth_domain, death_domain, scale)
 
-        # store the kernel parameters used in a dictionary
-        self.kernel_parameters = {"bandwidth":bandwidth, "max_persistence":max_persistence}
+    def smooth(self, homology_group=None, delete_rows=None):
 
         # construct domain
         bd = np.linspace(start = self.birth_domain[0],
@@ -143,7 +144,7 @@ class PersistenceKernels(object):
             temp_PD = self.PD.PD.copy()
         else:
             temp_PD = self.PD.select_homology(homology_group=homology_group,
-                                             delete_rows=delete_rows)
+                                              delete_rows=delete_rows)
 
         # rotate the persistence diagram and reduce to relevant info.
         temp_PD[:,2] = temp_PD[:,2] - temp_PD[:,1]
@@ -191,105 +192,103 @@ class PersistenceKernels(object):
 
         return(np.flipud(pixels))
 
-    def plot_kernel(self, f, show_contours=False, cmap="Blues", n_levels=11, PD=False, homology_group=None):
-
-        def plot_pi(self, f, cmap, PD, homology_group):
-            f = np.flipud(f)
-            fig, ax = plt.subplots()
-
-            # set the domain
-            extent = [self.birth_domain[0], self.birth_domain[1], self.death_domain[0], self.death_domain[1]]
-            cset = ax.imshow(f, interpolation="nearest", cmap=cmap, origin="lower",
-                             extent=extent)
-
-            # overlay the persistence diagram
-            if PD:
-                if homology_group is None:
-                    homology_group = list(self.PD.homology_groups)
-
-                homology_group.sort()
-                hommarkers = ["o", "^", "s"]
-                homcolors = ["black", "red", "blue"]
-
-                # cycle through homology groups and plot.
-                for hom in homology_group:
-                    col = homcolors[int(hom)]
-                    mark = hommarkers[int(hom)]
-                    tempPD = self.PD.select_homology(homology_group=hom)
-                    tempPD[:, 2] = tempPD[:, 2] - tempPD[:, 1]
-                    tempPD = tempPD[:, 1:]
-
-                    ax.plot(tempPD[:,0],
-                            tempPD[:,1],
-                            marker=mark,
-                            color=col,
-                            label="Hom {}".format(int(hom)),
-                            ls="none")
-                ax.legend()
-
-            ax.set_xlabel('Birth')
-            ax.set_ylabel('Persistence')
-
-            plt.colorbar(cset)
-
-            plt.show()
-
-
-        def plot_fn(self, f, show_contours, cmap, n_levels, PD, homology_group):
-            x, y = self._construct_domain()
-
-            # plt.style.use('ggplot')
-
-            l = np.linspace(0, np.max(f), n_levels)
-
-            fig, ax = plt.subplots()
-            cset = ax.contourf(x, y, f, cmap = cmap, levels=l)
-
-            ax.set_xlabel('Birth')
-            ax.set_ylabel('Death')
-
-            # plot the diagonal line
-            xmin = min(0, np.min(self.PD.PD[:,1]))
-            xmax = max(np.max(x), np.max(y))
-            ax.plot([xmin,xmax], [xmin,xmax], '--', c="0.80", lw=0.90)
-
-            # overlay the persistence diagram
-            if PD:
-                if homology_group is None:
-                    homology_group = list(self.PD.homology_groups)
-
-                homology_group.sort()
-                hommarkers = ["o", "^", "s"]
-                homcolors = ["black", "red", "blue"]
-
-                # cycle through homology groups and plot.
-                for hom in homology_group:
-                    col = homcolors[int(hom)]
-                    mark = hommarkers[int(hom)]
-                    tempPD = self.PD.select_homology(homology_group=hom)[:,1:]
-                    tempPD = tempPD.reshape(-1, 2)
-                    tempPD[:,1] = tempPD[:,1] - tempPD[:,0]
-                    ax.plot(tempPD[:,0],
-                            tempPD[:,1],
-                            marker=mark,
-                            color=col,
-                            label="Hom {}".format(int(hom)),
-                            ls="none")
-                ax.legend(loc=4)
-
-            # colorbar and show
-            plt.colorbar(cset)
-            plt.show()
-
-
-        if self.kernel == "pi":
-            plot_pi(self, f, cmap, PD, homology_group)
-
-        else:
-            plot_fn(self, f, show_contours, cmap, n_levels, PD, homology_group)
-
-
-
+#
+# def plot_kernel(self, f, show_contours=False, cmap="Blues", n_levels=11, PD=False, homology_group=None):
+#
+#     def plot_pi(self, f, cmap, PD, homology_group):
+#         f = np.flipud(f)
+#         fig, ax = plt.subplots()
+#
+#         # set the domain
+#         extent = [self.birth_domain[0], self.birth_domain[1], self.death_domain[0], self.death_domain[1]]
+#         cset = ax.imshow(f, interpolation="nearest", cmap=cmap, origin="lower",
+#                          extent=extent)
+#
+#         # overlay the persistence diagram
+#         if PD:
+#             if homology_group is None:
+#                 homology_group = list(self.PD.homology_groups)
+#
+#             homology_group.sort()
+#             hommarkers = ["o", "^", "s"]
+#             homcolors = ["black", "red", "blue"]
+#
+#             # cycle through homology groups and plot.
+#             for hom in homology_group:
+#                 col = homcolors[int(hom)]
+#                 mark = hommarkers[int(hom)]
+#                 tempPD = self.PD.select_homology(homology_group=hom)
+#                 tempPD[:, 2] = tempPD[:, 2] - tempPD[:, 1]
+#                 tempPD = tempPD[:, 1:]
+#
+#                 ax.plot(tempPD[:,0],
+#                         tempPD[:,1],
+#                         marker=mark,
+#                         color=col,
+#                         label="Hom {}".format(int(hom)),
+#                         ls="none")
+#             ax.legend()
+#
+#         ax.set_xlabel('Birth')
+#         ax.set_ylabel('Persistence')
+#
+#         plt.colorbar(cset)
+#
+#         plt.show()
+#
+#
+#     def plot_fn(self, f, show_contours, cmap, n_levels, PD, homology_group):
+#         x, y = self._construct_domain()
+#
+#         # plt.style.use('ggplot')
+#
+#         l = np.linspace(0, np.max(f), n_levels)
+#
+#         fig, ax = plt.subplots()
+#         cset = ax.contourf(x, y, f, cmap = cmap, levels=l)
+#
+#         ax.set_xlabel('Birth')
+#         ax.set_ylabel('Death')
+#
+#         # plot the diagonal line
+#         xmin = min(0, np.min(self.PD.PD[:,1]))
+#         xmax = max(np.max(x), np.max(y))
+#         ax.plot([xmin,xmax], [xmin,xmax], '--', c="0.80", lw=0.90)
+#
+#         # overlay the persistence diagram
+#         if PD:
+#             if homology_group is None:
+#                 homology_group = list(self.PD.homology_groups)
+#
+#             homology_group.sort()
+#             hommarkers = ["o", "^", "s"]
+#             homcolors = ["black", "red", "blue"]
+#
+#             # cycle through homology groups and plot.
+#             for hom in homology_group:
+#                 col = homcolors[int(hom)]
+#                 mark = hommarkers[int(hom)]
+#                 tempPD = self.PD.select_homology(homology_group=hom)[:,1:]
+#                 tempPD = tempPD.reshape(-1, 2)
+#                 tempPD[:,1] = tempPD[:,1] - tempPD[:,0]
+#                 ax.plot(tempPD[:,0],
+#                         tempPD[:,1],
+#                         marker=mark,
+#                         color=col,
+#                         label="Hom {}".format(int(hom)),
+#                         ls="none")
+#             ax.legend(loc=4)
+#
+#         # colorbar and show
+#         plt.colorbar(cset)
+#         plt.show()
+#
+#
+#     if self.kernel == "pi":
+#         plot_pi(self, f, cmap, PD, homology_group)
+#
+#     else:
+#         plot_fn(self, f, show_contours, cmap, n_levels, PD, homology_group)
 # levels = np.linspace(-2.0, 1.601, 40)
 # norm = cm.colors.Normalize(vmax=abs(Z).max(), vmin=-abs(Z).max())
 #
