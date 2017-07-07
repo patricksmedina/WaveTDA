@@ -3,50 +3,40 @@
 ###
 
 # external packages
-cimport cnumpy
-import numpy
+import numpy as np
 
 # declare fused types for wavelet and covariate arrays
-ctypedef fused wavetype:
+ctypedef fused waveType:
     float
-    long
+    double
 
-ctypedef fused covatype:
+ctypedef fused covType:
     int
     float
-    long
+    double
+
+# global variables
+cdef:
+    float EPS = 1e-50       # buffer to prevent dividing by zero.
+    float thresh = 1e-20    # convergence threshold for EM
+    int niters = 1000
+
+# functions for BayesTDA-Cython independence model
+cdef expectationMaximization(int num_samples,
+                             int num_kernels,
+                             int num_wavelets,
+                             waveType[:,:] wavelet_coeffs,
+                             covType[:] covariates):
+
+    cdef double lnLikelihood, oldLnLikelihood = 0.0
+    cdef int iter = 0
+
+    while True:
+        iter += 1
+        oldLnLikelihood = lnLikelihood
+
+        # TODO: parallelize this step.
+        for k in range(num_kernels):
 
 
-
-# cython class for bayes regression independence model
-cdef class BayesRegressionIM:
-    def __cinit__(self,
-                  int num_samples,
-                  int num_kernels,
-                  int num_wavelets,
-                  int num_covariates):
-
-        self.bayesReg = new bayesRegressionDM(numScales,
-                                              numWavelets,
-                                              numCovariates,
-                                              numSamples,
-                                              waveletCoefficients,
-                                              covariateMatrix,
-                                              use,
-                                              groupScaling)
-
-    def __dealloc__(self):
-        del self.bayesReg
-
-    def performBayesianAnalysis(self):
-        self.bayesReg.performBayesianAnalysis()
-
-    def getPosteriorProbabilities(self):
-        return self.bayesReg.getPosteriorProbabilities()
-
-    def getPiEstimates(self):
-        return self.bayesReg.getPiEstimates()
-
-    # TODO: DELETE WHEN DONE!!!
-    def getAllBFs(self):
-        return self.bayesReg.getAllBFs()
+#
