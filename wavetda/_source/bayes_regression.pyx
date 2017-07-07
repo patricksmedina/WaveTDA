@@ -22,20 +22,27 @@ cdef:
     int niters = 1000
 
 # functions for BayesTDA-Cython independence model
+cdef float computeLnBayesFactor(int num_samples,
+                                waveType[:] wavelet_coeffs,
+                                covType[:] covariates):
+    pass
+
 cdef expectationMaximization(int num_samples,
                              int num_kernels,
                              int num_wavelets,
                              waveType[:,:] wavelet_coeffs,
-                             covType[:] covariates):
+                             covType[:] covariates,
+                             int[:] use):
 
-    cdef double lnLikelihood, oldLnLikelihood = 0.0
-    cdef int iter = 0
+    cdef:
+        double lnLikelihood, oldLnLikelihood = 0.0
+        int iter = 0
 
+    # main EM loop
     while True:
         iter += 1
         oldLnLikelihood = lnLikelihood
 
-        # TODO: parallelize this step.
         for k in range(num_kernels):
 
 
