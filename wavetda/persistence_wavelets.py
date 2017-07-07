@@ -4,9 +4,8 @@ import pywt
 
 class PersistenceWavelets(object):
 
-    def __init__(self, PK):
-        self.PK = PK
-        self.scale = PK.scale
+    def __init__(self, scale):
+        self.scale = scale
         self.basis = "haar"
 
     def construct_wavelet_vector(self, data):
@@ -28,9 +27,10 @@ class PersistenceWavelets(object):
         """
         Reconstructs the PyWavelets vector.
         """
-        # assume domain is a power of 2 for now...
+
         # assign an empty wavelet coefficient list
         wavelet_coeffs = []
+
         #
         ### Store the wavelet coefficient at the largest scale
         #
