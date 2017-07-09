@@ -5,3 +5,5 @@
 wavetda/test.py
 
 *.o
+
+*.pyc
