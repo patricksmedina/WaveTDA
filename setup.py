@@ -85,19 +85,32 @@
 #     },
 # )
 
+# from distutils.core import setup, Extension
+# from Cython.Build import cythonize
+# import os
+#
+# here = os.path.abspath(os.path.dirname(__file__))
+#
+# ext = Extension("wavetda.statistics.bayes_regression",
+#                 sources=[os.path.join(here,
+#                                       "wavetda/_source/bayes_regression.pyx"),
+#                          os.path.join(here,
+#                                       "wavetda/_source/_bayesregression.cpp")
+#                 ],
+#                 extra_compile_args=['-std=c++11'],
+#                 language="c++")
+#
+# setup(name="bayes_regression", ext_modules=cythonize(ext))
+
 from distutils.core import setup, Extension
 from Cython.Build import cythonize
+from numpy import get_include
 import os
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 ext = Extension("wavetda.statistics.bayes_regression",
-                sources=[os.path.join(here,
-                                      "wavetda/_source/bayes_regression.pyx"),
-                         os.path.join(here,
-                                      "wavetda/_source/_bayesregression.cpp")
-                ],
-                extra_compile_args=['-std=c++11'],
-                language="c++")
+                sources=[os.path.join(here,"wavetda/_source/bayes_regression.pyx")],
+                include_dirs = ['.',get_include()])
 
 setup(name="bayes_regression", ext_modules=cythonize(ext))
