@@ -86,6 +86,25 @@ cdef class bayes_regression:
         np.savetxt(fname, np.asarray(self.lnBFs), delimiter=",")
         self.lnBFs = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
 
+    def _loadPiEstimates(self, cov):
+        """
+        Load Pi Estimates for use in the EM algorithm for the current step.
+        """
+
+        name = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
+        temp_pi = np.genfromtxt(fname, delimiter=",")
+        self.pi_estimates = temp_pi.astype(np.float32)
+
+    def _savePiEstimates(self, cov):
+        """
+        Save Pi Estimates from EM algorithm for current step.
+        """
+
+        fname = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
+        np.savetxt(fname, np.asarray(self.lnBFs), delimiter=",")
+        self.pi_estimates = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
+
+
     # functions for BayesTDA-Cython independence model
     cdef void computeLnBayesFactor(self, int ker, int wav, int cov):
         """
@@ -158,10 +177,10 @@ cdef class bayes_regression:
             # loop across covariates -- TODO: Parallelize this
             for cov in range(self.num_covariates):
 
-                # load lnBFs for covariate
+                # load lnBFs and previous piEstimates for covariate
                 if self.niter > 1:
                     self._loadLnBFs(cov)
-                    # TODO: load the old pi_estimates
+                    self._loadPiEstimates(cov)
 
                 # # loop across the persistence kernels
                 # for ker in range(self.num_kernels):
@@ -212,7 +231,10 @@ cdef class bayes_regression:
 
                 # overwrite the pi_estimates at this scale and zero out the temporary_pi_estimates array
                 self.pi_estimates = self.temporary_pi_estimates
-                self.temporary_pi_estimates = np.zeros((num_kernels, 1), dtype=np.float32)
+                self.temporary_pi_estimates = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
+
+                # save the pi_estimates for this covariate
+                self._savePiEstimates(cov)
 
                 # save lnBFs for covariate
                 if self.niter == 1:
