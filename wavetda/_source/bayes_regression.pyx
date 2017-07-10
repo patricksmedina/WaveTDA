@@ -9,26 +9,32 @@ import os
 
 # global variables
 cdef:
-    double EPS = 1e-50     # buffer to prevent errors with zero in division/log.
-    double THRESH = 1e-20 # convergence threshold for EM
-    int NITERS = 1000     # number of EM iterations
+    double EPS = 1e-50                  # buffer to prevent errors with zero in division/log.
+    double THRESH = 1e-20               # convergence threshold for EM
+    int NITERS = 100                    # number of EM iterations
 
 # bayes_regression independence model class
 cdef class bayes_regression:
 
     # initialize variable types
     cdef:
-        # constants needed throughout computations
-        int num_samples, num_kernels, num_scales
-        int num_wavelets, num_covariates, niter
-        double lnLikelihood, ss_a
-        str outdir
+        # Constants
+        int num_samples                 # number of samples
+        int num_kernels                 # number of persistence kernels
+        int num_scales                  # number of scales used for kernels
+        int num_wavelets                # total number of wavelets for kernels
+        int num_covariates              # number of covariates
+        int niter                       # current iteration number in the EM algorithm
+        double lnLikelihood             # log Likelihood value
+        double ss_a                     # prior \sigma^{2}_{a}
+        str outdir                      # directory where files are saved
 
-        # arrays
+        # Arrays
         float[:,:,:] wavelet_coeffs     # stores the wavelet coefficients
         float[:,:] pi_estimates         # stores the EM estimates
+        float[:,:] temp_pi_estimate     # stores the temporary pi estimates
         float[:,:] covariates           # stores the covariate values
-        float[:,:] lnBFs                # stores the logBFs
+        float[:,:] lnBFs                # stores the log Bayes Factors
         long[:] use                     # stores the use array
 
     # Python class initialization
@@ -42,9 +48,9 @@ cdef class bayes_regression:
         self.num_wavelets = num_wavelets
         self.num_covariates = num_covariates
         self.outdir = outdir
-        self.niter = 0
-        self.lnLikelihood = 0
         self.ss_a = 0.05
+        self.niter = 0
+        self.lnLikelihood = 0.0
 
         # store arrays to self
         self.wavelet_coeffs = wavelet_coeffs
@@ -52,6 +58,7 @@ cdef class bayes_regression:
         self.use = use
 
         # initialize estimates of pi and lnBFs
+        self.temp_pi_estimate = np.zeros((num_kernels, num_scales + 1), dtype=np.float32)
         self.pi_estimates = np.ones((num_kernels, (num_scales + 1)), dtype=np.float32) / (num_scales + 1)
         self.lnBFs = np.zeros((num_kernels, num_wavelets), dtype=np.float32)
 
@@ -59,7 +66,6 @@ cdef class bayes_regression:
         """
         Executes EM algorithm.
         """
-
         self.expectationMaximization()
 
     def _loadLnBFs(self, cov):
@@ -69,7 +75,7 @@ cdef class bayes_regression:
 
         fname = os.path.join(self.outdir,"lnBFs","cov_{}.csv".format(cov))
         temp_csv = np.genfromtxt(fname, delimiter=",")
-        self.logBFs = temp_csv.astype(np.float32)
+        self.lnBFs = temp_csv.astype(np.float32)
 
     def _savelnBFs(self, cov):
         """
@@ -106,16 +112,27 @@ cdef class bayes_regression:
 
         self.lnBFs[ker, wav] = tempBF
 
-    cdef double computeLnLikelihood(self, int ker, int wav, int cov, int length):
+    cdef double computeLnLikelihood(self, int ker, int wav, int cov, int sca):
         """
 
         """
+        cdef double gamma, ll
 
         if self.niter == 1:
             self.computeLnBayesFactor(ker, wav, cov)
 
         # computeLnLikelihood value and update temp_pi_estimate
-        pass
+        gamma = self.pi_estimates[ker, sca] * np.exp(self.lnBFs[ker, wav])
+        gamma = gamma / ((1 - self.pi_estimates[ker, sca]) + gamma)
+
+        # update the temporary pi estimate
+        self.temp_pi_estimate[ker, sca] = self.temp_pi_estimate[ker, sca] + gamma
+
+        # compute the lnLikelihood
+        ll = gamma * (np.log(self.pi_estimates[ker, sca]) + self.lnBFs[ker, wav] - np.log(1 - self.pi_estimates[ker, sca]))
+        ll = ll + np.log(1 - self.pi_estimates[ker, sca])
+
+        return(ll)
 
     cdef void expectationMaximization(self):
         """
@@ -135,48 +152,71 @@ cdef class bayes_regression:
             self.niter += 1
             oldLnLikelihood = self.lnLikelihood
 
+            if self.niter % 100 == 0:
+                print("[INFO] Current step {}".format(self.niter))
+
             # loop across covariates -- TODO: Parallelize this
             for cov in range(self.num_covariates):
 
                 # load lnBFs for covariate
                 if self.niter > 1:
                     self._loadLnBFs(cov)
+                    # TODO: load the old pi_estimates
 
-                # loop across the persistence kernels
-                for ker in range(self.num_kernels):
-                    # zero out range of indices
-                    start_idx = 0
-                    end_idx = 0
+                # # loop across the persistence kernels
+                # for ker in range(self.num_kernels):
+                #     # zero out range of indices
+                #     start_idx = 0
+                #     end_idx = 0
+                #
+                #     # loop across the scales
+                #     for sca in range(self.num_scales + 1):
+                #
+                #         # get indices of wavelet coefficients at that scale
+                #         if sca == 0:
+                #             start_idx = 0
+                #             stop_idx = 1
+                #         else:
+                #             start_idx += stop_idx
+                #             stop_idx += 3 * (4 ** (sca - 1))
 
-                    # loop across the scales
-                    for sca in range(self.num_scales + 1):
+                # loop across the scales
+                for sca in range(self.num_scales + 1):
 
-                        # get indices of wavelet coefficients at that scale
-                        if sca == 0:
-                            start_idx = 0
-                            stop_idx = 1
-                        else:
-                            start_idx += stop_idx
-                            stop_idx += 3 * (4 ** (sca - 1))
+                    # get indices of wavelet coefficients at that scale
+                    if sca == 0:
+                        start_idx = 0
+                        stop_idx = 1
+                    else:
+                        start_idx += stop_idx
+                        stop_idx += 3 * (4 ** (sca - 1))
+
+                    # loop across the persistence kernels
+                    for ker in range(self.num_kernels):
 
                         # loop across the wavelet coefficients at that scale
                         for wav in range(start_idx, stop_idx):
 
                             if self.use[wav] == 1:
-                                # get the number of scales
-                                length = stop_idx - start_idx
-
                                 # update the log-likelihood with the given value
-                                self.lnLikelihood += self.computeLnLikelihood(ker, wav, cov, length)
+                                self.lnLikelihood += self.computeLnLikelihood(ker, wav, cov, sca)
                             # END IF
                         # END WAVELET LOOP
-                    # END SCALE LOOP
-                # END KERNEL LOOP
+                    # END KERNEL LOOP
+
+                    # normalize the temporary_pi_estimates
+                    for ker in range(self.num_kernels):
+                        self.temporary_pi_estimates[ker,sca] = self.temporary_pi_estimates[ker,sca] / (stop_idx - start_idx)
+
+                # END SCALE LOOP
+
+                # overwrite the pi_estimates at this scale and zero out the temporary_pi_estimates array
+                self.pi_estimates = self.temporary_pi_estimates
+                self.temporary_pi_estimates = np.zeros((num_kernels, 1), dtype=np.float32)
 
                 # save lnBFs for covariate
                 if self.niter == 1:
                     self._savelnBFs(cov)
-
             # END COVARIATE LOOP
 
             # compute the relative likelihood and check if convergence criteria is met
