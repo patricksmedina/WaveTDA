@@ -11,7 +11,7 @@ import os
 cdef:
     double EPS = 1e-50                  # buffer to prevent errors with zero in division/log.
     double THRESH = 1e-20               # convergence threshold for EM
-    int NITERS = 1                    # number of EM iterations
+    int NITERS = 1000                   # number of allowable EM iterations
 
 # bayes_regression independence model class
 cdef class bayes_regression:
@@ -32,14 +32,15 @@ cdef class bayes_regression:
         # Arrays
         float[:,:,:] wavelet_coeffs     # stores the wavelet coefficients
         float[:,:] pi_estimates         # stores the EM estimates
-        float[:,:] temp_pi_estimates     # stores the temporary pi estimates
+        float[:,:] temp_pi_estimates    # stores the temporary pi estimates
         float[:,:] covariates           # stores the covariate values
         float[:,:] lnBFs                # stores the log Bayes Factors
         long[:] use                     # stores the use array
 
     # Python class initialization
     def __init__(self, num_samples, num_kernels, num_scales, num_wavelets,
-                 num_covariates, wavelet_coeffs, covariates, use, outdir):
+                 num_covariates, wavelet_coeffs, covariates, use, outdir,
+                 ss_a = 0.05):
 
         # store variables to self
         self.num_samples = num_samples
@@ -48,7 +49,7 @@ cdef class bayes_regression:
         self.num_wavelets = num_wavelets
         self.num_covariates = num_covariates
         self.outdir = outdir
-        self.ss_a = 0.05
+        self.ss_a = ss_a
         self.niter = 0
         self.lnLikelihood = 0.0
 
@@ -59,7 +60,7 @@ cdef class bayes_regression:
 
         # initialize estimates of pi and lnBFs
         self.temp_pi_estimates = np.zeros((num_kernels, num_scales + 1), dtype=np.float32)
-        self.pi_estimates = np.ones((num_kernels, num_scales + 1), dtype=np.float32) / (num_scales + 1)
+        self.pi_estimates = 0.01 * np.ones((num_kernels, num_scales + 1), dtype=np.float32) / (num_scales + 1)
         self.lnBFs = np.zeros((num_kernels, num_wavelets), dtype=np.float32)
 
     def __call__(self):
@@ -75,6 +76,8 @@ cdef class bayes_regression:
 
         fname = os.path.join(self.outdir,"lnBFs","cov_{}.csv".format(cov))
         temp_csv = np.genfromtxt(fname, delimiter=",")
+        temp_csv = temp_csv.reshape(self.num_kernels, self.num_wavelets)
+
         self.lnBFs = temp_csv.astype(np.float32)
 
     def _savelnBFs(self, cov):
@@ -83,35 +86,41 @@ cdef class bayes_regression:
         """
 
         fname = os.path.join(self.outdir,"lnBFs","cov_{}.csv".format(cov))
-        np.savetxt(fname, np.asarray(self.lnBFs), delimiter=",")
+        np.savetxt(fname, np.asarray(self.lnBFs).reshape(self.num_kernels, self.num_wavelets), delimiter=",")
         self.lnBFs = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
 
     def _loadPiEstimates(self, cov):
         """
-        Load Pi Estimates for use in the EM algorithm for the current step.
+        Load pi estimates for use in the EM algorithm for the current step.
         """
 
         fname = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
         temp_pi = np.genfromtxt(fname, delimiter=",")
+        temp_pi = temp_pi.reshape(self.num_kernels, self.num_scales + 1)
+
         self.pi_estimates = temp_pi.astype(np.float32)
 
     def _savePiEstimates(self, cov):
         """
-        Save Pi Estimates from EM algorithm for current step.
+        Save pi Estimates from EM algorithm for current step.
         """
 
         fname = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
-        np.savetxt(fname, np.asarray(self.pi_estimates), delimiter=",")
+        np.savetxt(fname, np.asarray(self.pi_estimates).reshape(self.num_kernels, self.num_scales + 1), delimiter=",")
 
         # resets the pi_estimate array for the next covariate -- reset to default array if in first iteration
         if self.niter > 1:
             self.pi_estimates = np.zeros((self.num_kernels, self.num_scales + 1), dtype=np.float32)
         else:
-            self.pi_estimates = np.ones((self.num_kernels, self.num_scales + 1), dtype=np.float32) / (self.num_scales + 1)
+            self.pi_estimates = 0.5 * np.ones((self.num_kernels, self.num_scales + 1), dtype=np.float32) / (self.num_scales + 1)
 
     def getLnLikelihoodRatio(self):
+        """
+        Prints the log likelihood ratio stored to the object.  This function
+        only makes sense to call after running the EM algorithm.
+        """
         print("[INFO] Log likelihood ratio {}".format(self.lnLikelihood))
-    
+
     # functions for BayesTDA-Cython independence model
     cdef void computeLnBayesFactor(self, int ker, int wav, int cov):
         """
@@ -128,12 +137,12 @@ cdef class bayes_regression:
         omega = np.array([[self.num_samples, x.sum()],[x.sum(), np.dot(x,x) + self.ss_a]], dtype=np.float32)
 
         # numerator / denominator
-        num = np.log(sww - self.num_samples * np.mean(w) ** 2 + EPS)
+        num = np.log(sww - self.num_samples * (np.mean(w) ** 2) + EPS)
         denom = np.log(sww - np.dot(np.dot(swx, np.linalg.inv(omega)), swx.T) + EPS)
 
         # compute bayes factor
         tempBF = -np.log(self.ss_a) + 0.5 * np.log(self.num_samples)
-        tempBF += 0.5 * np.log(np.linalg.det(omega) + EPS)
+        tempBF -= 0.5 * np.log(np.linalg.det(omega) + EPS)
         tempBF += 0.5 * self.num_samples * (num - denom)
 
         self.lnBFs[ker, wav] = tempBF
@@ -149,7 +158,7 @@ cdef class bayes_regression:
 
         # computeLnLikelihood value and update temp_pi_estimates
         gamma = self.pi_estimates[ker, sca] * np.exp(self.lnBFs[ker, wav])
-        gamma = gamma / ((1 - self.pi_estimates[ker, sca]) + gamma + EPS)
+        gamma = gamma / ((1 - self.pi_estimates[ker, sca]) + gamma)
 
         # update the temporary pi estimate
         self.temp_pi_estimates[ker, sca] = self.temp_pi_estimates[ker, sca] + gamma
@@ -213,8 +222,7 @@ cdef class bayes_regression:
 
                     # normalize the temp_pi_estimates
                     for ker in range(self.num_kernels):
-                        self.temp_pi_estimates[ker,sca] = self.temp_pi_estimates[ker,sca] / (stop_idx - start_idx)
-
+                        self.temp_pi_estimates[ker, sca] = self.temp_pi_estimates[ker,sca] / (stop_idx - start_idx)
                 # END SCALE LOOP
 
                 # overwrite the pi_estimates at this scale and zero out the temp_pi_estimates array
@@ -231,8 +239,8 @@ cdef class bayes_regression:
 
             # compute the relative likelihood and check if convergence criteria is met
             relative_likelihood = abs(self.lnLikelihood - oldLnLikelihood) / abs(oldLnLikelihood + EPS)
-
             if relative_likelihood < THRESH or self.niter > NITERS:
+                print("[INFO] Method converged in {} iterations".format(self.niter))
                 break
 
         # END WHILE
