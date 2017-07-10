@@ -9,7 +9,7 @@ import os
 
 # global variables
 cdef:
-    double EPS = 1e-50                  # buffer to prevent errors with zero in division/log.
+    double EPS = 1e-200                  # buffer to prevent errors with zero in division/log.
     double THRESH = 1e-20               # convergence threshold for EM
     int NITERS = 1000                   # number of allowable EM iterations
 
@@ -30,9 +30,9 @@ cdef class bayes_regression:
         str outdir                      # directory where files are saved
 
         # Arrays
-        float[:,:,:] wavelet_coeffs     # stores the wavelet coefficients
-        float[:,:] pi_estimates         # stores the EM estimates
-        float[:,:] temp_pi_estimates    # stores the temporary pi estimates
+        double[:,:,:] wavelet_coeffs     # stores the wavelet coefficients
+        double[:,:] pi_estimates         # stores the EM estimates
+        double[:,:] temp_pi_estimates    # stores the temporary pi estimates
         float[:,:] covariates           # stores the covariate values
         float[:,:] lnBFs                # stores the log Bayes Factors
         long[:] use                     # stores the use array
@@ -40,7 +40,7 @@ cdef class bayes_regression:
     # Python class initialization
     def __init__(self, num_samples, num_kernels, num_scales, num_wavelets,
                  num_covariates, wavelet_coeffs, covariates, use, outdir,
-                 ss_a = 0.05):
+                 ss_a = 0.4):
 
         # store variables to self
         self.num_samples = num_samples
@@ -59,8 +59,8 @@ cdef class bayes_regression:
         self.use = use
 
         # initialize estimates of pi and lnBFs
-        self.temp_pi_estimates = np.zeros((num_kernels, num_scales + 1), dtype=np.float32)
-        self.pi_estimates = 0.01 * np.ones((num_kernels, num_scales + 1), dtype=np.float32) / (num_scales + 1)
+        self.temp_pi_estimates = np.zeros((num_kernels, num_scales + 1), dtype=np.float64)
+        self.pi_estimates = 0.1 * np.ones((num_kernels, num_scales + 1), dtype=np.float64) / (num_scales + 1)
         self.lnBFs = np.zeros((num_kernels, num_wavelets), dtype=np.float32)
 
     def __call__(self):
@@ -98,7 +98,7 @@ cdef class bayes_regression:
         temp_pi = np.genfromtxt(fname, delimiter=",")
         temp_pi = temp_pi.reshape(self.num_kernels, self.num_scales + 1)
 
-        self.pi_estimates = temp_pi.astype(np.float32)
+        self.pi_estimates = temp_pi.astype(np.float64)
 
     def _savePiEstimates(self, cov):
         """
@@ -110,9 +110,9 @@ cdef class bayes_regression:
 
         # resets the pi_estimate array for the next covariate -- reset to default array if in first iteration
         if self.niter > 1:
-            self.pi_estimates = np.zeros((self.num_kernels, self.num_scales + 1), dtype=np.float32)
+            self.pi_estimates = np.zeros((self.num_kernels, self.num_scales + 1), dtype=np.float64)
         else:
-            self.pi_estimates = 0.5 * np.ones((self.num_kernels, self.num_scales + 1), dtype=np.float32) / (self.num_scales + 1)
+            self.pi_estimates = 0.1 * np.ones((self.num_kernels, self.num_scales + 1), dtype=np.float64) / (self.num_scales + 1)
 
     def getLnLikelihoodRatio(self):
         """
@@ -127,6 +127,8 @@ cdef class bayes_regression:
         Compute the log Bayes Factors used in the EM algorithm.
         """
 
+        cdef double tempBF, num, denom, sww
+
         # extract needed arrays
         w = np.asarray(self.wavelet_coeffs[ker, :, wav])
         x = np.asarray(self.covariates[:, cov])
@@ -134,7 +136,7 @@ cdef class bayes_regression:
         # sum of squares
         sww = np.dot(w,w)
         swx = np.array([w.sum(), np.dot(w,x)], dtype=np.float32).reshape(1,2)
-        omega = np.array([[self.num_samples, x.sum()],[x.sum(), np.dot(x,x) + self.ss_a]], dtype=np.float32)
+        omega = np.array([[self.num_samples, x.sum()],[x.sum(), np.dot(x,x) + (1.0 / self.ss_a)]], dtype=np.float32)
 
         # numerator / denominator
         num = np.log(sww - self.num_samples * (np.mean(w) ** 2) + EPS)
@@ -142,7 +144,7 @@ cdef class bayes_regression:
 
         # compute bayes factor
         tempBF = -np.log(self.ss_a) + 0.5 * np.log(self.num_samples)
-        tempBF -= 0.5 * np.log(np.linalg.det(omega) + EPS)
+        tempBF -= 0.5 * np.log(np.linalg.det(omega))
         tempBF += 0.5 * self.num_samples * (num - denom)
 
         self.lnBFs[ker, wav] = tempBF
@@ -151,27 +153,28 @@ cdef class bayes_regression:
         """
 
         """
-        cdef double gamma, ll
+        cdef double gamma, ll, p
 
         if self.niter == 1:
             self.computeLnBayesFactor(ker, wav, cov)
 
         # computeLnLikelihood value and update temp_pi_estimates
-        gamma = self.pi_estimates[ker, sca] * np.exp(self.lnBFs[ker, wav])
-        gamma = gamma / ((1 - self.pi_estimates[ker, sca]) + gamma)
+        p = self.pi_estimates[ker, sca]
+        gamma = p * np.exp(self.lnBFs[ker, wav])
+        gamma = gamma / (1 - p + gamma)
 
         # update the temporary pi estimate
         self.temp_pi_estimates[ker, sca] = self.temp_pi_estimates[ker, sca] + gamma
 
         # compute the lnLikelihood
-        ll = gamma * (np.log(self.pi_estimates[ker, sca] + EPS) + self.lnBFs[ker, wav] - np.log(1 - self.pi_estimates[ker, sca] + EPS))
-        ll = ll + np.log(1 - self.pi_estimates[ker, sca] + EPS)
+        ll = gamma * (np.log(p + EPS) + self.lnBFs[ker, wav] - np.log(1 - p + EPS))
+        ll = ll + np.log(1 - p + EPS)
 
         return(ll)
 
     cdef void expectationMaximization(self):
         """
-
+        Performs the EM algorithm on the given input.
         """
         # declare internal variables
         cdef:
@@ -227,7 +230,7 @@ cdef class bayes_regression:
 
                 # overwrite the pi_estimates at this scale and zero out the temp_pi_estimates array
                 self.pi_estimates = self.temp_pi_estimates
-                self.temp_pi_estimates = np.zeros((self.num_kernels, self.num_scales + 1), dtype=np.float32)
+                self.temp_pi_estimates = np.zeros((self.num_kernels, self.num_scales + 1), dtype=np.float64)
 
                 # save the pi_estimates for this covariate
                 self._savePiEstimates(cov)
