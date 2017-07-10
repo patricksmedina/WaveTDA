@@ -11,7 +11,7 @@ import os
 cdef:
     double EPS = 1e-50                  # buffer to prevent errors with zero in division/log.
     double THRESH = 1e-20               # convergence threshold for EM
-    int NITERS = 100                    # number of EM iterations
+    int NITERS = 1                    # number of EM iterations
 
 # bayes_regression independence model class
 cdef class bayes_regression:
@@ -91,7 +91,7 @@ cdef class bayes_regression:
         Load Pi Estimates for use in the EM algorithm for the current step.
         """
 
-        name = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
+        fname = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
         temp_pi = np.genfromtxt(fname, delimiter=",")
         self.pi_estimates = temp_pi.astype(np.float32)
 
@@ -182,23 +182,6 @@ cdef class bayes_regression:
                     self._loadLnBFs(cov)
                     self._loadPiEstimates(cov)
 
-                # # loop across the persistence kernels
-                # for ker in range(self.num_kernels):
-                #     # zero out range of indices
-                #     start_idx = 0
-                #     end_idx = 0
-                #
-                #     # loop across the scales
-                #     for sca in range(self.num_scales + 1):
-                #
-                #         # get indices of wavelet coefficients at that scale
-                #         if sca == 0:
-                #             start_idx = 0
-                #             stop_idx = 1
-                #         else:
-                #             start_idx += stop_idx
-                #             stop_idx += 3 * (4 ** (sca - 1))
-
                 # loop across the scales
                 for sca in range(self.num_scales + 1):
 
@@ -207,8 +190,10 @@ cdef class bayes_regression:
                         start_idx = 0
                         stop_idx = 1
                     else:
-                        start_idx += stop_idx
+                        start_idx = stop_idx
                         stop_idx += 3 * (4 ** (sca - 1))
+
+                    print(sca, start_idx, stop_idx)
 
                     # loop across the persistence kernels
                     for ker in range(self.num_kernels):
@@ -220,18 +205,19 @@ cdef class bayes_regression:
                                 # update the log-likelihood with the given value
                                 self.lnLikelihood += self.computeLnLikelihood(ker, wav, cov, sca)
                             # END IF
+
                         # END WAVELET LOOP
                     # END KERNEL LOOP
 
-                    # normalize the temporary_pi_estimates
+                    # normalize the temp_pi_estimate
                     for ker in range(self.num_kernels):
-                        self.temporary_pi_estimates[ker,sca] = self.temporary_pi_estimates[ker,sca] / (stop_idx - start_idx)
+                        self.temp_pi_estimate[ker,sca] = self.temp_pi_estimate[ker,sca] / (stop_idx - start_idx)
 
                 # END SCALE LOOP
 
-                # overwrite the pi_estimates at this scale and zero out the temporary_pi_estimates array
-                self.pi_estimates = self.temporary_pi_estimates
-                self.temporary_pi_estimates = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
+                # overwrite the pi_estimates at this scale and zero out the temp_pi_estimate array
+                self.pi_estimates = self.temp_pi_estimate
+                self.temp_pi_estimate = np.zeros((self.num_kernels, self.num_wavelets), dtype=np.float32)
 
                 # save the pi_estimates for this covariate
                 self._savePiEstimates(cov)
