@@ -30,9 +30,10 @@ cdef class bayes_regression:
         str outdir                      # directory where files are saved
 
         # Arrays
-        double[:,:,:] wavelet_coeffs     # stores the wavelet coefficients
-        double[:,:] pi_estimates         # stores the EM estimates
-        double[:,:] temp_pi_estimates    # stores the temporary pi estimates
+        double[:,:,:] wavelet_coeffs    # stores the wavelet coefficients
+        float[:,:,:] parameters         # stores the parameters for the posterior analysis
+        double[:,:] pi_estimates        # stores the EM estimates
+        double[:,:] temp_pi_estimates   # stores the temporary pi estimates
         float[:,:] covariates           # stores the covariate values
         float[:,:] lnBFs                # stores the log Bayes Factors
         long[:] use                     # stores the use array
@@ -62,6 +63,7 @@ cdef class bayes_regression:
         self.temp_pi_estimates = np.zeros((num_kernels, num_scales + 1), dtype=np.float64)
         self.pi_estimates = 0.1 * np.ones((num_kernels, num_scales + 1), dtype=np.float64) / (num_scales + 1)
         self.lnBFs = np.zeros((num_kernels, num_wavelets), dtype=np.float32)
+        self.parameters = np.zeros((num_kernels, 2, num_wavelets), dtype=np.float32)
 
     def __call__(self):
         """
@@ -77,7 +79,6 @@ cdef class bayes_regression:
         fname = os.path.join(self.outdir,"lnBFs","cov_{}.csv".format(cov))
         temp_csv = np.genfromtxt(fname, delimiter=",")
         temp_csv = temp_csv.reshape(self.num_kernels, self.num_wavelets)
-
         self.lnBFs = temp_csv.astype(np.float32)
 
     def _savelnBFs(self, cov):
@@ -105,6 +106,8 @@ cdef class bayes_regression:
         Save pi Estimates from EM algorithm for current step.
         """
 
+        # generate the filename, generate the array
+        # to save with persistence kernels in the first row and save the array
         fname = os.path.join(self.outdir,"piEstimates","cov_{}.csv".format(cov))
         np.savetxt(fname, np.asarray(self.pi_estimates).reshape(self.num_kernels, self.num_scales + 1), delimiter=",")
 
@@ -114,6 +117,20 @@ cdef class bayes_regression:
         else:
             self.pi_estimates = 0.1 * np.ones((self.num_kernels, self.num_scales + 1), dtype=np.float64) / (self.num_scales + 1)
 
+    def _saveParameters(self, cov):
+        """
+        Saves the parameters for the posterior analysis.
+        """
+
+        for ker in range(self.num_kernels):
+            fname = os.path.join(self.outdir,"parameters","cov_{0}_ker_{1}.csv".format(cov, ker))
+            np.savetxt(fname, np.asarray(self.parameters[ker,:,:]), delimiter=",")
+
+        self.parameters = np.zeros((self.num_kernels, 2, self.num_wavelets), dtype=np.float32)
+
+    def getOutdir(self):
+        print("[INFO] Directory of output: {}".format(self.outdir))
+
     def getLnLikelihoodRatio(self):
         """
         Prints the log likelihood ratio stored to the object.  This function
@@ -121,7 +138,6 @@ cdef class bayes_regression:
         """
         print("[INFO] Log likelihood ratio {}".format(self.lnLikelihood))
 
-    # functions for BayesTDA-Cython independence model
     cdef void computeLnBayesFactor(self, int ker, int wav, int cov):
         """
         Compute the log Bayes Factors used in the EM algorithm.
@@ -149,10 +165,19 @@ cdef class bayes_regression:
 
         self.lnBFs[ker, wav] = tempBF
 
+        # compute parameters for posterior analysis
+        # mean then scaling
+        self.parameters[ker,0,wav] = np.dot(np.linalg.inv(omega), swx.T)[1,0]
+        self.parameters[ker,1,wav] = (omega[0,0] / (omega[0][0] * omega[1][1] - omega[0][1] * omega[1][0]))
+        self.parameters[ker,1,wav] = self.parameters[ker,1,wav] * (sww - np.dot(np.dot(swx, np.linalg.inv(omega)), swx.T))
+        self.parameters[ker,1,wav] = self.parameters[ker,1,wav] / self.num_samples
+
     cdef double computeLnLikelihood(self, int ker, int wav, int cov, int sca):
         """
-
+        Computes the log likelihood for a given persistence kernel,
+        wavelet coefficient, and covariate.
         """
+
         cdef double gamma, ll, p
 
         if self.niter == 1:
@@ -197,6 +222,7 @@ cdef class bayes_regression:
                 if self.niter > 1:
                     self._loadLnBFs(cov)
                     self._loadPiEstimates(cov)
+                    self.parameters = None
 
                 # loop across the scales
                 for sca in range(self.num_scales + 1):
@@ -239,6 +265,10 @@ cdef class bayes_regression:
                 if self.niter == 1:
                     self._savelnBFs(cov)
             # END COVARIATE LOOP
+
+            # save parameters for covariate
+            if self.niter == 1:
+                self._saveParameters(cov)
 
             # compute the relative likelihood and check if convergence criteria is met
             relative_likelihood = abs(self.lnLikelihood - oldLnLikelihood) / abs(oldLnLikelihood + EPS)
