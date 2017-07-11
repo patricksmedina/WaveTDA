@@ -1,8 +1,8 @@
-# import package dependencies
-import numpy as np
-
 # import local modules
 from wavetda.statistics import bayes_regression as br
+
+# import package dependencies
+import numpy as np
 
 class BayesianRegression(object):
 
