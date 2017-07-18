@@ -8,7 +8,7 @@ class PersistenceWavelets(object):
         self.scale = scale
         self.basis = "haar"
 
-    def construct_wavelet_vector(self, data):
+    def construct_wavelet_vector(self, data, scale_size = False):
         """
         construct2DWaveletVector
         """
@@ -20,6 +20,9 @@ class PersistenceWavelets(object):
         # Merge the coefficients into a single array, while preserving the order of the input
         coeff_vector = np.hstack([np.vstack(coeff[i]).flatten() for i in range(0,len(coeff))])
         coeff_level_size = np.vstack([(np.vstack(coeff[i]).flatten()).shape[0] for i in range(0,len(coeff))])
+
+        if scale_size:
+            return(coeff_vector, coeff_level_size)
 
         return(coeff_vector)
 
