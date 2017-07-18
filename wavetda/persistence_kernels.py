@@ -4,11 +4,13 @@ from scipy.stats import norm
 from matplotlib import cm
 import numpy as np
 
-class PersistenceKernel(object):
-    """ Routines for computing persistence kernels """
+class _PersistenceKernel(object):
+    """
+    Common variables and routines for computing all persistence kernels.
 
-    def __init__(self, PD, birth_domain, death_domain, scale):
-        self.PD = PD
+    """
+
+    def __init__(self, birth_domain, death_domain, scale):
         self.birth_domain = birth_domain
         self.death_domain = death_domain
         self.scale = scale
@@ -23,24 +25,24 @@ class PersistenceKernel(object):
                          num = 2 ** self.scale)
         return(np.meshgrid(bd, dd))
 
-class PWGK(PersistenceKernel):
+class PWGK(_PersistenceKernel):
 
-    def __init__(self, PD, birth_domain, death_domain, scale, C, p, bandwidth):
-        super(PWGK, self).__init__(PD, birth_domain, death_domain, scale)
+    def __init__(self, birth_domain, death_domain, scale, C, p, bandwidth):
+        super(PWGK, self).__init__(birth_domain, death_domain, scale)
         self.C = C
         self.p = p
         self.bandwidth = bandwidth
 
-    def smooth(self, homology_group=None, delete_rows=None, zero_out=False):
+    def smooth(self, PD, homology_group=None, delete_rows=None, zero_out=False):
         # construct the domain
         xx, yy = self._construct_domain()
         domain = np.vstack((xx.ravel(), yy.ravel())).T
 
         # copy PD from the PD object -- isolate homology group
         if homology_group is None:
-            temp_PD = self.PD.PD.copy()
+            temp_PD = PD.PD.copy()
         else:
-            temp_PD = self.PD.select_homology(homology_group=homology_group,
+            temp_PD = PD.select_homology(homology_group=homology_group,
                                               delete_rows=delete_rows)
 
         # Return zero matrix if homology group is empty
@@ -74,12 +76,13 @@ class PWGK(PersistenceKernel):
         # return the kernel between PD1 and PD2
         return(Fbd.reshape(2 ** self.scale, 2 ** self.scale))
 
-class PIF(PersistenceKernel):
-    def __init__(PD, birth_domain, death_domain, scale, bandwidth):
-        self.bandwidth = bandwidth
-        super(PIF, self).__init__(PD, birth_domain, death_domain, scale)
+class PIF(_PersistenceKernel):
 
-    def smooth(self, homology_group=None, delete_rows=None, zero_out=False):
+    def __init__(self, birth_domain, death_domain, scale, bandwidth):
+        self.bandwidth = bandwidth
+        super(PIF, self).__init__(birth_domain, death_domain, scale)
+
+    def smooth(self, PD, homology_group=None, delete_rows=None, zero_out=False):
 
         # construct the domain
         xx, yy = self._construct_domain()
@@ -87,10 +90,10 @@ class PIF(PersistenceKernel):
 
         # copy PD from the PD object -- isolate homology group
         if homology_group is None:
-            temp_PD = self.PD.PD.copy()
+            temp_PD = PD.PD.copy()
         else:
-            temp_PD = self.PD.select_homology(homology_group=homology_group,
-                                             delete_rows=delete_rows)
+            temp_PD = PD.select_homology(homology_group=homology_group,
+                                              delete_rows=delete_rows)
 
         # Return zero matrix if homology group is empty
         if temp_PD.shape[0] == 0:
@@ -116,20 +119,20 @@ class PIF(PersistenceKernel):
         Fbd = np.sum(np.multiply(weight, Fbd), axis = 1)
 
         # zero out stuff below the diagonal
-        if zero_out and not PD.rotated:
+        if zero_out:
             Fbd[np.where(domain[:,0] >= domain[:,1])] = 0.0
 
         # store the kernel smoothed diagram
         return(Fbd.reshape(2 ** self.scale, 2 ** self.scale))
 
-class PI(PersistenceKernel):
-    def __init__(PD, birth_domain, death_domain, scale, bandwidth,
+class PI(_PersistenceKernel):
+    def __init__(self, birth_domain, death_domain, scale, bandwidth,
                  max_persistence=None):
         self.bandwidth = bandwidth
         self.max_persistence = max_persistence
-        super(PI, self).__init__(PD, birth_domain, death_domain, scale)
+        super(PI, self).__init__(birth_domain, death_domain, scale)
 
-    def smooth(self, homology_group=None, delete_rows=None):
+    def smooth(self, PD, homology_group=None, delete_rows=None):
 
         # construct domain
         bd = np.linspace(start = self.birth_domain[0],
@@ -141,9 +144,9 @@ class PI(PersistenceKernel):
 
         # copy PD from the PD object -- isolate homology group
         if homology_group is None:
-            temp_PD = self.PD.PD.copy()
+            temp_PD = PD.PD.copy()
         else:
-            temp_PD = self.PD.select_homology(homology_group=homology_group,
+            temp_PD = PD.select_homology(homology_group=homology_group,
                                               delete_rows=delete_rows)
 
         # rotate the persistence diagram and reduce to relevant info.
@@ -207,7 +210,7 @@ class PI(PersistenceKernel):
 #         # overlay the persistence diagram
 #         if PD:
 #             if homology_group is None:
-#                 homology_group = list(self.PD.homology_groups)
+#                 homology_group = list(PD.homology_groups)
 #
 #             homology_group.sort()
 #             hommarkers = ["o", "^", "s"]
@@ -217,7 +220,7 @@ class PI(PersistenceKernel):
 #             for hom in homology_group:
 #                 col = homcolors[int(hom)]
 #                 mark = hommarkers[int(hom)]
-#                 tempPD = self.PD.select_homology(homology_group=hom)
+#                 tempPD = PD.select_homology(homology_group=hom)
 #                 tempPD[:, 2] = tempPD[:, 2] - tempPD[:, 1]
 #                 tempPD = tempPD[:, 1:]
 #
@@ -251,14 +254,14 @@ class PI(PersistenceKernel):
 #         ax.set_ylabel('Death')
 #
 #         # plot the diagonal line
-#         xmin = min(0, np.min(self.PD.PD[:,1]))
+#         xmin = min(0, np.min(PD.PD[:,1]))
 #         xmax = max(np.max(x), np.max(y))
 #         ax.plot([xmin,xmax], [xmin,xmax], '--', c="0.80", lw=0.90)
 #
 #         # overlay the persistence diagram
 #         if PD:
 #             if homology_group is None:
-#                 homology_group = list(self.PD.homology_groups)
+#                 homology_group = list(PD.homology_groups)
 #
 #             homology_group.sort()
 #             hommarkers = ["o", "^", "s"]
@@ -268,7 +271,7 @@ class PI(PersistenceKernel):
 #             for hom in homology_group:
 #                 col = homcolors[int(hom)]
 #                 mark = hommarkers[int(hom)]
-#                 tempPD = self.PD.select_homology(homology_group=hom)[:,1:]
+#                 tempPD = PD.select_homology(homology_group=hom)[:,1:]
 #                 tempPD = tempPD.reshape(-1, 2)
 #                 tempPD[:,1] = tempPD[:,1] - tempPD[:,0]
 #                 ax.plot(tempPD[:,0],

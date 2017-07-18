@@ -7,3 +7,7 @@ wavetda/test.py
 *.o
 
 *.pyc
+
+process_wavelets.py
+
+process_genotypes.py
