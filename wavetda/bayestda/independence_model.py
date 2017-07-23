@@ -5,7 +5,7 @@ from wavetda.bayestda import bayes_regression_ind as br
 import numpy as np
 import os
 
-class BayesianRegression(object):
+class bayesian_regression(object):
     """
     BayesTDA independence model.
 
@@ -13,7 +13,7 @@ class BayesianRegression(object):
     ----------
     num_kernels : int
         The number of persistence kernels in the analysis.
-        
+
     num_samples : int
         The number of samples.
 
@@ -53,7 +53,7 @@ class BayesianRegression(object):
         self.num_covariates = num_covariates
         self.use = use
 
-    def variable_error_checking():
+    def variable_error_checking(self):
         print("[INFO] variable_error_checking to be written")
 
     def fit(self, W, X):
@@ -78,27 +78,29 @@ class BayesianRegression(object):
 
         if self.use is None:
             print(
-                "[INFO] No use matrix specified.
-                 Constructing default use matrix from the wavelet
-                 coefficients."
+                "[INFO] No use matrix specified. " +
+                 "Constructing default use matrix from the wavelet " +
+                 "coefficients."
             )
 
             # use only non-zero wavelet coefficients
             self.use = np.array(
-                (np.sum(wavelet_coefficients, axis=1) > 0) * 1
+                (np.sum(W, axis=1) != 0) * 1
             )
-            self.use = self.use.reshape(1, -1)
+            # self.use = self.use.reshape(1, -1)
+            self.use = self.use.ravel()
 
-        variable_error_checking()
+        self.variable_error_checking()
 
         # create bayesRegression object
         execute_br = br.bayesRegression(
+            self.num_samples,
+            self.num_kernels,
             self.num_scales,
             self.num_wavelets,
             self.num_covariates,
-            self.num_samples,
-            self.W,
-            self.X,
+            W,
+            X,
             self.use
         )
 

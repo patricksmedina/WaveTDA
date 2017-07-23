@@ -68,15 +68,14 @@ cdef class bayesRegression:
 
         # initialize estimates of pi and lnBFs
         self.temp_pi_estimates = np.zeros(
-            (num_covariates, num_kernels, num_scales + 1),
+            (num_kernels, num_scales + 1),
             dtype=np.float64
         )
 
         self.pi_estimates = np.ones(
             (num_covariates, num_kernels, num_scales + 1),
             dtype=np.float64
-        )
-        self.pi_estimates = self.pi_estimates / (num_scales + 1)
+        ) / (num_scales + 1)
 
         self.lnBFs = np.zeros(
             (num_covariates, num_kernels, num_wavelets),
