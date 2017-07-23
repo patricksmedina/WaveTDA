@@ -13,14 +13,19 @@ class BayesianRegression(object):
     ----------
     num_kernels : int
         The number of persistence kernels in the analysis.
+        
     num_samples : int
         The number of samples.
+
     num_wavelets : int
         The total number of wavelet coefficients per sample.
+
     num_covariates : int
         The number of covariates for this analysis.
+
     num_scales : int
         The number of scales used in for the Haar wavelet basis.
+
     use : ndarray, optional, shape (num_wavelets, ) or (1, num_wavelets)
         Binary array indicating which wavelet coefficients to perform
         the analysis on.  Binary array elements with value zero will skip the
@@ -49,7 +54,7 @@ class BayesianRegression(object):
         self.use = use
 
     def variable_error_checking():
-        pass
+        print("[INFO] variable_error_checking to be written")
 
     def fit(self, W, X):
         """
@@ -69,9 +74,6 @@ class BayesianRegression(object):
         out : ndarray
             A copy of `PD` with rows not equal to `homology_group` removed.
             Additional elements of the reduced array are removed by `skiprows.`
-
-        Examples
-        --------
         """
 
         if self.use is None:
@@ -103,7 +105,15 @@ class BayesianRegression(object):
         # fit the model
         execute_br()
 
-        #
-        self.posterior_probs = np.array(execute_br.getPosteriorProbabilities())
-        self.class_probs = np.array(execute_br.getPiEstimates())
-        self.all_lnbfs = np.array(execute_br.getAllBFs())
+        # extract the computed values
+        self.posterior_parameters = np.asarray(
+            execute_br.getParameters()
+        )
+
+        self.class_probs = np.asarray(
+            execute_br.getPiEstimates()
+        )
+
+        self.log_bfs = np.asarray(
+            execute_br.getLnBFs()
+        )

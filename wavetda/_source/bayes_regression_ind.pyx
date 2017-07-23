@@ -94,6 +94,15 @@ cdef class bayesRegression:
     def getLnLikelihoodRatio(self):
         return(self.lnLikelihood)
 
+    def getParameters(self):
+        return(self.parameters)
+
+    def getPiEstimates(self):
+        return(self.pi_estimates)
+
+    def getLnBFs(self):
+        return(self.lnBFs)
+
     cdef void computeLnBayesFactor(self, int ker, int wav, int cov):
         cdef double tempBF, num, denom, sww
 
