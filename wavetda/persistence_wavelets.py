@@ -26,7 +26,7 @@ class PersistenceWavelets(object):
 
         return(coeff_vector)
 
-    def reconstruct_wavelet_array(coeff_vector):
+    def _reconstruct_wavelet_array(self, coeff_vector):
         """
         Reconstructs the PyWavelets vector.
         """
@@ -63,6 +63,12 @@ class PersistenceWavelets(object):
 
         return(wavelet_coeffs)
 
+    def _convert_wavelets_to_kernel(self, wcs):
+        """
+        convertWaveletsToData
+        """
+        return(pywt.waverec2(wcs, self.basis))
+
 
 
 
@@ -90,11 +96,7 @@ class PersistenceWavelets(object):
 #     return(x)
 
 
-# def convertWaveletsToData(wcs, basis, **kwargs):
-#     """
-#     convertWaveletsToData
-#     """
-#     return(pywt.waverec2(wcs, basis, **kwargs))
+
 # # END FUNCTION
 #
 # if __name__ == "__main__":

@@ -83,10 +83,10 @@ class PersistenceDiagram(object):
             ax.plot(tempPD[:,0],
                     tempPD[:,1],
                     alpha=0.75,
-                       marker=mark,
-                       color=col,
-                       label="Hom {}".format(int(hom)),
-                       ls="none")
+                    marker=mark,
+                    color=col,
+                    label="Hom {}".format(int(hom)),
+                    ls="none")
 
         # plot features custom to the persistence diagram
         ax.set_xlabel('Birth')

@@ -5,7 +5,7 @@ def simulate_wavelet_coefficients(mean, var, phi, dof, samples = 1000, seed = No
     """
     simulateWaveletCoefficients
 
-
+    
     """
 
     # generate a seed

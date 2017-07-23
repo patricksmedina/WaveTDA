@@ -34,11 +34,11 @@
 #         'License :: OSI Approved :: MIT License',
 #         'Programming Language :: Python :: 2.7',
 #         'Programming Language :: Python :: 3.6',
-#         'Programming Language :: C++',
+#         'Programming Language :: C',
 #         'Programming Language :: Cython'
 #     ],
 #
-#     keywords='bayesian regression topological data analysis persistence kernels',
+#     keywords='bayesian regression topological data analysis persistence kernels wavelets',
 #
 #
 #     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
@@ -109,8 +109,8 @@ import os
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-ext = Extension("wavetda.statistics.bayes_regression",
-                sources=[os.path.join(here,"wavetda/_source/bayes_regression.pyx")],
+ext = Extension("wavetda.bayestda.bayes_regression_ind",
+                sources=[os.path.join(here,"wavetda/_source/bayes_regression_ind.pyx")],
                 include_dirs = ['.',get_include()])
 
-setup(name="bayes_regression", ext_modules=cythonize(ext))
+setup(name="bayes_regression_ind", ext_modules=cythonize(ext))

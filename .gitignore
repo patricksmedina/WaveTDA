@@ -11,3 +11,5 @@ wavetda/test.py
 process_wavelets.py
 
 process_genotypes.py
+
+process_data_correction.py

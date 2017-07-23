@@ -1,6 +1,6 @@
-###
-###
-###
+# bayes_regression_ind.pyx
+# Cython implementation of BayesTDA.
+# Author: Patrick S. Medina
 
 # external packages
 cimport numpy as cnp
@@ -9,7 +9,7 @@ import os
 
 # global variables
 cdef:
-    double EPS = 1e-200                  # buffer to prevent errors with zero in division/log.
+    double EPS = 1e-200                 # buffer to prevent errors with zero in division/log.
     double THRESH = 1e-20               # convergence threshold for EM
     int NITERS = 1000                   # number of allowable EM iterations
 
@@ -39,9 +39,18 @@ cdef class bayes_regression:
         long[:] use                     # stores the use array
 
     # Python class initialization
-    def __init__(self, num_samples, num_kernels, num_scales, num_wavelets,
-                 num_covariates, wavelet_coeffs, covariates, use, outdir,
-                 ss_a = 0.4):
+    def __init__(
+        self,
+        num_samples,
+        num_kernels,
+        num_scales,
+        num_wavelets,
+        num_covariates,
+        wavelet_coeffs,
+        covariates,
+        use,
+        ss_a = 0.4
+    ):
 
         # store variables to self
         self.num_samples = num_samples
@@ -200,7 +209,10 @@ cdef class bayes_regression:
     cdef void expectationMaximization(self):
         """
         Performs the EM algorithm on the given input.
+
+
         """
+
         # declare internal variables
         cdef:
             double oldLnLikelihood
@@ -209,8 +221,10 @@ cdef class bayes_regression:
             # start and stop indices for the wavelets at a scale
             int start_idx, end_idx
 
-        # main EM loop -- mimics do-while in C++
+
+        # main EM loop
         while True:
+            
             # update variables
             self.niter += 1
             oldLnLikelihood = self.lnLikelihood
