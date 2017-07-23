@@ -5,7 +5,7 @@ import os
 FILEDIR = os.path.abspath(os.path.dirname(__file__))
 
 ### DATA LOADING FUNCTIONS
-def load_linked_annulus():
+def linked_annuli():
     """
     Loads the linked annuli data for hypothesis testing.
     """
@@ -22,7 +22,7 @@ def load_linked_annulus():
             )
     return(annuli)
 
-def load_annuli_regression():
+def annuli_regression():
     """
     Loads the annuli regression data in a dictionary.  Dictionary keys
     correspond to the value of the variables used in the regression.
