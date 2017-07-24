@@ -50,6 +50,4 @@ def annuli_regression():
             f = f.split(".")[0]
             ann_number.append(f)
 
-    temp_ann = zip(ann_number, annuli)
-    temp_ann.sort()
-    return(dict(temp_ann))
+    return(dict(zip(ann_number, annuli)))
